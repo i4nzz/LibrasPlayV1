@@ -1,24 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
+
+import {
+  StyleSheet,
+  View,
+  Text,
   ScrollView,
   Dimensions,
   FlatList,
   Alert
 } from 'react-native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 
-// Importar componentes
+// compontentes
 import { LibrasButton, CardLesson, LibrasTabs } from './Components/UI';
 import SplashScreen1 from './Components/Screens/Splash/SplashScreen1';
+import LoginScreen from './Components/Screens/Auth/LoginScreen';
 import LearnDetail from './Components/Screens/Learn/learn-detail';
 import ProgressScreen from './Components/Screens/Progress/progress-screen';
 
-// Importar dados
 import { LibrasAPI } from './Components/Data/API/user';
 import { UserDataStorage } from './Components/Data/LocalStorage/userData';
 
@@ -31,6 +33,7 @@ export default function App() {
   const [userProgress, setUserProgress] = useState(null);
   const [selectedLetter, setSelectedLetter] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     initializeApp();
@@ -38,11 +41,10 @@ export default function App() {
 
   const initializeApp = async () => {
     try {
-      // Carregar dados do alfabeto
+      
       const alphabet = await LibrasAPI.getAlphabet();
       setAlphabetData(alphabet);
 
-      // Carregar progresso do usuário
       const progress = await UserDataStorage.getProgress();
       setUserProgress(progress);
 
@@ -54,6 +56,16 @@ export default function App() {
   };
 
   const handleStartApp = () => {
+    setCurrentScreen('login');
+  };
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setCurrentScreen('main');
+  };
+
+  const handleSkipLogin = () => {
+    setUser({ name: 'Visitante', isGuest: true });
     setCurrentScreen('main');
   };
 
@@ -124,7 +136,17 @@ export default function App() {
     );
   }
 
-  // Tela de detalhes da letra
+  // Tela de Login
+  if (currentScreen === 'login') {
+    return (
+      <>
+        <LoginScreen onLogin={handleLogin} onSkip={handleSkipLogin} />
+        <StatusBar style="light" />
+      </>
+    );
+  }
+
+
   if (currentScreen === 'learnDetail' && selectedLetter) {
     return (
       <>
@@ -144,7 +166,7 @@ export default function App() {
     );
   }
 
-  // Tela principal com navegação por abas
+  
   return (
     <View style={styles.container}>
       <StatusBar style="auto" />
@@ -155,6 +177,7 @@ export default function App() {
           alphabetData={alphabetData}
           onLearnLetter={handleLearnLetter}
           userProgress={userProgress}
+          user={user}
         />
       )}
 
@@ -164,7 +187,10 @@ export default function App() {
 
       {activeTab === 'progress' && <ProgressScreen />}
 
-      {activeTab === 'settings' && <SettingsScreen />}
+      {activeTab === 'settings' && <SettingsScreen user={user} onLogout={() => {
+        setUser(null);
+        setCurrentScreen('login');
+      }} />}
 
       {/* Navegação inferior */}
       <LibrasTabs 
@@ -176,7 +202,7 @@ export default function App() {
 }
 
 // Tela Aprender
-const LearnScreen = ({ alphabetData, onLearnLetter, userProgress }) => (
+const LearnScreen = ({ alphabetData, onLearnLetter, userProgress, user }) => (
   <LinearGradient
     colors={['#ff6b9d', '#fff']}
     style={styles.screenContainer}
@@ -198,10 +224,13 @@ const LearnScreen = ({ alphabetData, onLearnLetter, userProgress }) => (
       {/* Seção de boas-vindas */}
       <View style={styles.welcomeSection}>
         <Text style={styles.welcomeText}>
-          Bem-vindo ao LibrasPlay! 🌟
+          Olá, {user?.name || 'Visitante'}! 🌟
         </Text>
         <Text style={styles.welcomeSubtext}>
-          Escolha uma letra para começar a aprender!
+          {user?.isGuest ? 
+            'Você está no modo visitante. Faça login para salvar seu progresso!' :
+            'Escolha uma letra para começar a aprender!'
+          }
         </Text>
       </View>
 
@@ -254,7 +283,7 @@ const PracticeScreen = ({ onPractice }) => (
 );
 
 // Tela Configurações
-const SettingsScreen = () => (
+const SettingsScreen = ({ user, onLogout }) => (
   <LinearGradient
     colors={['#95e1d3', '#fff']}
     style={styles.screenContainer}
@@ -268,6 +297,23 @@ const SettingsScreen = () => (
       </View>
 
       <View style={styles.settingsContainer}>
+        {/* Informações do usuário */}
+        {user && (
+          <View style={styles.userInfoCard}>
+            <MaterialIcons 
+              name={user.isGuest ? "person" : "account-circle"} 
+              size={40} 
+              color="#95e1d3" 
+            />
+            <View style={styles.userInfoText}>
+              <Text style={styles.userName}>{user.name}</Text>
+              <Text style={styles.userStatus}>
+                {user.isGuest ? 'Modo Visitante' : 'Usuário Logado'}
+              </Text>
+            </View>
+          </View>
+        )}
+
         <SettingItem
           icon="language"
           title="Idioma"
@@ -321,6 +367,27 @@ const SettingsScreen = () => (
             'LibrasPlay é um aplicativo educativo para ensinar Libras de forma divertida para crianças.\n\nDesenvolvido com ❤️ para inclusão e acessibilidade.'
           )}
         />
+
+        {/* Botão de Logout */}
+        {user && (
+          <SettingItem
+            icon={user.isGuest ? "login" : "logout"}
+            title={user.isGuest ? "Fazer Login" : "Sair"}
+            subtitle={user.isGuest ? "Entre para salvar seu progresso" : "Voltar para tela de login"}
+            onPress={() => {
+              Alert.alert(
+                user.isGuest ? 'Fazer Login' : 'Sair',
+                user.isGuest ? 
+                  'Deseja fazer login para salvar seu progresso?' :
+                  'Tem certeza que deseja sair?',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { text: user.isGuest ? 'Login' : 'Sair', onPress: onLogout }
+                ]
+              );
+            }}
+          />
+        )}
       </View>
     </ScrollView>
   </LinearGradient>
@@ -452,6 +519,36 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   settingSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  userInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+  },
+  userInfoText: {
+    flex: 1,
+    marginLeft: 15,
+  },
+  userName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  userStatus: {
     fontSize: 14,
     color: '#666',
     marginTop: 2,
